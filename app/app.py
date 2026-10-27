@@ -11,6 +11,7 @@ import random
 import sqlite3
 import subprocess
 import traceback
+import html
 
 import requests
 import uvicorn
@@ -121,7 +122,7 @@ def ping(host: str = "127.0.0.1"):
 
 @app.get("/hello")
 def hello(name: str = ""):
-    return HTMLResponse(f"<h1>Bonjour {name}</h1>")
+    return HTMLResponse(f"<h1>Bonjour {html.escape(name)}</h1>")
 
 
 @app.get("/files/{name:path}")
