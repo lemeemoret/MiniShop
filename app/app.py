@@ -3,11 +3,10 @@
 Ne jamais déployer ce code tel quel. Votre mission : le rendre conforme.
 Documentation interactive : http://localhost:5000/docs
 """
-import base64
+
 import hashlib
 import logging
 import os
-import pickle
 import random
 import sqlite3
 import subprocess
@@ -25,6 +24,8 @@ from fastapi import Body, FastAPI, HTTPException, Request
 
 import ast
 import operator
+
+from pydantic import BaseModel, ConfigDict, Field
 
 SECRET_KEY = "super-secret-key-123"
 DB_PATH = os.environ.get("DB_PATH", "shop.db")
@@ -166,10 +167,15 @@ async def import_yaml(request: Request):
     return {"keys": list(cfg.keys()) if isinstance(cfg, dict) else str(type(cfg))}
 
 
+class Profile(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    name: str = Field(min_length=1, max_length=64)
+    age: int = Field(ge=0, le=150)
+
+
 @app.post("/import-profile")
-async def import_profile(request: Request):
-    profile = pickle.loads(base64.b64decode(await request.body()))
-    return {"profile": str(profile)}
+def import_profile(profile: Profile):
+    return {"profile": profile.model_dump()}
 
 
 @app.get("/fetch")
