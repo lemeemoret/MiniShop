@@ -26,6 +26,7 @@ import ast
 import operator
 
 from pydantic import BaseModel, ConfigDict, Field
+from pathlib import Path
 
 SECRET_KEY = "super-secret-key-123"
 DB_PATH = os.environ.get("DB_PATH", "shop.db")
@@ -125,7 +126,14 @@ def hello(name: str = ""):
 
 @app.get("/files/{name:path}")
 def get_file(name: str):
-    return FileResponse(os.path.join(UPLOAD_DIR, name))
+    base = Path(UPLOAD_DIR).resolve()
+    try:
+        path = (base / name).resolve()
+    except ValueError:  # octet nul dans le chemin
+        raise HTTPException(status_code=404)
+    if not path.is_relative_to(base) or not path.is_file():
+        raise HTTPException(status_code=404)
+    return FileResponse(path)
 
 
 _OPS = {ast.Add: operator.add, ast.Sub: operator.sub,
