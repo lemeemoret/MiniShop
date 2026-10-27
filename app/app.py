@@ -37,7 +37,7 @@ DB_PATH = os.environ.get("DB_PATH", "shop.db")
 UPLOAD_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "uploads")
 ALLOWED_HOSTS = {"api.partenaire.com"}
 
-logging.basicConfig(level=logging.DEBUG)
+logging.basicConfig(level=logging.INFO)
 log = logging.getLogger("minishop")
 
 app = FastAPI(title="MiniShop", debug=True)
@@ -91,7 +91,6 @@ def health():
 @app.post("/login")
 def login(request: Request, data: dict = Body(...)):
     username, password = data["username"], data["password"]
-    log.info(f"login attempt user={username} password={password}")
     row = db().execute("SELECT * FROM users WHERE username = ?", (username,)).fetchone()
     try:
         ph.verify(row["password"] if row else DUMMY_HASH, password)
@@ -99,6 +98,7 @@ def login(request: Request, data: dict = Body(...)):
         return JSONResponse({"error": "bad credentials"}, status_code=401)
     if not row:
         return JSONResponse({"error": "bad credentials"}, status_code=401)
+    log.info("login user_id=%s", row["id"])
     request.session["user_id"] = row["id"]
     request.session["token"] = secrets.token_urlsafe(32)
     return {"status": "logged in", "user": row["username"]}
