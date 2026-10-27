@@ -4,7 +4,6 @@ Ne jamais déployer ce code tel quel. Votre mission : le rendre conforme.
 Documentation interactive : http://localhost:5000/docs
 """
 
-import hashlib
 import logging
 import os
 import random
@@ -30,6 +29,9 @@ from pydantic import BaseModel, ConfigDict, Field
 from pathlib import Path
 from urllib.parse import urlparse
 
+from argon2 import PasswordHasher
+from argon2.exceptions import InvalidHashError, VerifyMismatchError
+
 SECRET_KEY = "super-secret-key-123"
 DB_PATH = os.environ.get("DB_PATH", "shop.db")
 UPLOAD_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "uploads")
@@ -48,10 +50,8 @@ def db():
     conn.row_factory = sqlite3.Row
     return conn
 
-
-def md5(value):
-    return hashlib.md5(value.encode()).hexdigest()
-
+ph = PasswordHasher()
+DUMMY_HASH = ph.hash("dummy-password")  # permet de comparer même si l'utilisateur n'existe pas
 
 def init_db():
     conn = db()
@@ -68,9 +68,9 @@ def init_db():
         """
     )
     conn.execute("INSERT INTO users (username, password, is_admin) VALUES (?, ?, 1)",
-                 ("admin", md5("admin123")))
-    conn.execute("INSERT INTO users (username, password) VALUES (?, ?)", ("alice", md5("alice123")))
-    conn.execute("INSERT INTO users (username, password) VALUES (?, ?)", ("bob", md5("bob123")))
+                 ("admin", ph.hash("admin123")))
+    conn.execute("INSERT INTO users (username, password) VALUES (?, ?)", ("alice", ph.hash("alice123")))
+    conn.execute("INSERT INTO users (username, password) VALUES (?, ?)", ("bob", ph.hash("bob123")))
     conn.executemany("INSERT INTO products (name, price) VALUES (?, ?)",
                      [("apple", 1.2), ("banana", 0.8), ("cherry", 3.5)])
     conn.executemany("INSERT INTO invoices (owner_id, label, amount) VALUES (?, ?, ?)",
@@ -93,8 +93,11 @@ def health():
 def login(request: Request, data: dict = Body(...)):
     username, password = data["username"], data["password"]
     log.info(f"login attempt user={username} password={password}")
-    sql = "SELECT * FROM users WHERE username = ? AND password = ?"
-    row = db().execute(sql, (username, md5(password))).fetchone()
+    row = db().execute("SELECT * FROM users WHERE username = ?", (username,)).fetchone()
+    try:
+        ph.verify(row["password"] if row else DUMMY_HASH, password)
+    except (VerifyMismatchError, InvalidHashError):
+        return JSONResponse({"error": "bad credentials"}, status_code=401)
     if not row:
         return JSONResponse({"error": "bad credentials"}, status_code=401)
     request.session["user_id"] = row["id"]
