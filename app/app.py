@@ -20,6 +20,9 @@ from fastapi import Body, FastAPI, Request
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, PlainTextResponse
 from starlette.middleware.sessions import SessionMiddleware
 
+from ipaddress import ip_address
+from fastapi import Body, FastAPI, HTTPException, Request
+
 SECRET_KEY = "super-secret-key-123"
 DB_PATH = os.environ.get("DB_PATH", "shop.db")
 UPLOAD_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "uploads")
@@ -99,7 +102,15 @@ def search(q: str = ""):
 
 @app.get("/ping")
 def ping(host: str = "127.0.0.1"):
-    out = subprocess.run(f"ping -c 1 {host}", shell=True, capture_output=True, text=True)
+    try:
+        ip = ip_address(host)  # lève ValueError si ce n'est pas une IP valide
+    except ValueError:
+        raise HTTPException(status_code=400, detail="invalid host")
+    try:
+        out = subprocess.run(["ping", "-c", "1", str(ip)], capture_output=True,
+                             text=True, timeout=5, check=False)
+    except (subprocess.TimeoutExpired, OSError):
+        return JSONResponse({"error": "ping failed"}, status_code=502)
     return PlainTextResponse(out.stdout + out.stderr)
 
 
