@@ -28,10 +28,12 @@ import operator
 
 from pydantic import BaseModel, ConfigDict, Field
 from pathlib import Path
+from urllib.parse import urlparse
 
 SECRET_KEY = "super-secret-key-123"
 DB_PATH = os.environ.get("DB_PATH", "shop.db")
 UPLOAD_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "uploads")
+ALLOWED_HOSTS = {"api.partenaire.com"}
 AWS_KEY = "AKIAIOSFODNN7EXAMPLE"
 
 logging.basicConfig(level=logging.DEBUG)
@@ -189,7 +191,13 @@ def import_profile(profile: Profile):
 
 @app.get("/fetch")
 def fetch(url: str):
-    r = requests.get(url, verify=False)
+    u = urlparse(url)
+    if u.scheme != "https" or u.hostname not in ALLOWED_HOSTS:
+        raise HTTPException(status_code=400, detail="url not allowed")
+    try:
+        r = requests.get(url, timeout=5, allow_redirects=False)  # verify=True par défaut
+    except requests.RequestException:
+        raise HTTPException(status_code=502, detail="upstream error")
     return PlainTextResponse(r.text[:500])
 
 
