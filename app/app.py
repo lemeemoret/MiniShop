@@ -23,6 +23,9 @@ from starlette.middleware.sessions import SessionMiddleware
 from ipaddress import ip_address
 from fastapi import Body, FastAPI, HTTPException, Request
 
+import ast
+import operator
+
 SECRET_KEY = "super-secret-key-123"
 DB_PATH = os.environ.get("DB_PATH", "shop.db")
 UPLOAD_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "uploads")
@@ -124,10 +127,35 @@ def get_file(name: str):
     return FileResponse(os.path.join(UPLOAD_DIR, name))
 
 
+_OPS = {ast.Add: operator.add, ast.Sub: operator.sub,
+        ast.Mult: operator.mul, ast.Div: operator.truediv}
+
+
+def safe_eval(node):
+    """Évalue une expression arithmétique (+ - * /) : liste blanche de noeuds AST."""
+    if isinstance(node, ast.Expression):
+        return safe_eval(node.body)
+    if (isinstance(node, ast.Constant) and isinstance(node.value, (int, float))
+            and not isinstance(node.value, bool)):
+        return node.value
+    if isinstance(node, ast.BinOp) and type(node.op) in _OPS:
+        return _OPS[type(node.op)](safe_eval(node.left), safe_eval(node.right))
+    if isinstance(node, ast.UnaryOp) and isinstance(node.op, (ast.UAdd, ast.USub)):
+        value = safe_eval(node.operand)
+        return value if isinstance(node.op, ast.UAdd) else -value
+    raise ValueError("unsupported expression")
+
+
 @app.post("/calc")
 def calc(data: dict = Body(...)):
-    return {"result": str(eval(data["expr"]))}
-
+    expr = data.get("expr")
+    if not isinstance(expr, str) or len(expr) > 100:
+        raise HTTPException(status_code=400, detail="invalid expression")
+    try:
+        result = safe_eval(ast.parse(expr, mode="eval"))
+    except (ValueError, SyntaxError, ZeroDivisionError, RecursionError):
+        raise HTTPException(status_code=400, detail="invalid expression")
+    return {"result": str(result)}
 
 @app.post("/import-yaml")
 async def import_yaml(request: Request):
