@@ -4,33 +4,28 @@ Ne jamais déployer ce code tel quel. Votre mission : le rendre conforme.
 Documentation interactive : http://localhost:5000/docs
 """
 
+import ast
+import html
 import logging
+import operator
 import os
 import secrets
 import sqlite3
 import subprocess
 import traceback
-import html
+from ipaddress import ip_address
+from pathlib import Path
+from urllib.parse import urlparse
 
 import requests
 import uvicorn
 import yaml
-from fastapi import Body, FastAPI, Request
-from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, PlainTextResponse
-from starlette.middleware.sessions import SessionMiddleware
-
-from ipaddress import ip_address
-from fastapi import Body, FastAPI, HTTPException, Request
-
-import ast
-import operator
-
-from pydantic import BaseModel, ConfigDict, Field
-from pathlib import Path
-from urllib.parse import urlparse
-
 from argon2 import PasswordHasher
 from argon2.exceptions import InvalidHashError, VerifyMismatchError
+from fastapi import Body, Depends, FastAPI, HTTPException, Request
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, PlainTextResponse
+from pydantic import BaseModel, ConfigDict, Field
+from starlette.middleware.sessions import SessionMiddleware
 
 SECRET_KEY = os.environ["SECRET_KEY"]
 DB_PATH = os.environ.get("DB_PATH", "shop.db")
@@ -82,6 +77,18 @@ def init_db():
 async def handle_error(request: Request, exc: Exception):
     return HTMLResponse("<pre>" + traceback.format_exc() + "</pre>", status_code=500)
 
+def current_user(request: Request):
+    """Utilisateur connecté (lu en base d'après la session signée), sinon 401."""
+    user_id = request.session.get("user_id")
+    row = None
+    if user_id is not None:
+        row = db().execute("SELECT id, username, is_admin FROM users WHERE id = ?",
+                           (user_id,)).fetchone()
+    if row is None:
+        raise HTTPException(status_code=401, detail="login required")
+    user = dict(row)
+    user["role"] = "admin" if user["is_admin"] else "viewer"
+    return user
 
 @app.get("/health")
 def health():
@@ -204,12 +211,11 @@ def fetch(url: str):
 
 
 @app.get("/invoices/{invoice_id}")
-def invoice(invoice_id: int, request: Request):
-    if "user_id" not in request.session:
-        return JSONResponse({"error": "login required"}, status_code=401)
-    row = db().execute("SELECT * FROM invoices WHERE id = ?", (invoice_id,)).fetchone()
+def invoice(invoice_id: int, user: dict = Depends(current_user)):
+    row = db().execute("SELECT * FROM invoices WHERE id = ? AND owner_id = ?",
+                       (invoice_id, user["id"])).fetchone()
     if not row:
-        return JSONResponse({"error": "not found"}, status_code=404)
+        raise HTTPException(status_code=404, detail="not found")
     return dict(row)
 
 
