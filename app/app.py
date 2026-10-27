@@ -35,7 +35,14 @@ ALLOWED_HOSTS = {"api.partenaire.com"}
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger("minishop")
 
-app = FastAPI(title="MiniShop", debug=True)
+ENABLE_DOCS = os.environ.get("ENABLE_DOCS") == "1"
+app = FastAPI(
+    title="MiniShop",
+    debug=False,
+    docs_url="/docs" if ENABLE_DOCS else None,
+    redoc_url=None,
+    openapi_url="/openapi.json" if ENABLE_DOCS else None,
+)
 app.add_middleware(SessionMiddleware, secret_key=SECRET_KEY, https_only=True, same_site="lax")
 
 
@@ -262,4 +269,4 @@ def boom():
 
 if __name__ == "__main__":
     init_db()
-    uvicorn.run("app:app", host="0.0.0.0", port=5000, reload=True)
+    uvicorn.run("app:app", host=os.environ.get("HOST", "127.0.0.1"), port=5000)
