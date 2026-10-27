@@ -90,6 +90,20 @@ def current_user(request: Request):
     user["role"] = "admin" if user["is_admin"] else "viewer"
     return user
 
+ROLE_PERMS = {
+    "viewer": {"invoice:read"},
+    "admin": {"invoice:read", "user:read", "user:delete"},
+}
+
+
+def require(perm: str):
+    """Dépendance FastAPI : 401 si anonyme, 403 si la permission manque (refus par défaut)."""
+    def checker(user: dict = Depends(current_user)):
+        if perm not in ROLE_PERMS.get(user["role"], set()):
+            raise HTTPException(status_code=403, detail="forbidden")
+        return user
+    return checker
+
 @app.get("/health")
 def health():
     return {"status": "ok"}
@@ -220,17 +234,13 @@ def invoice(invoice_id: int, user: dict = Depends(current_user)):
 
 
 @app.get("/admin/users")
-def admin_users(request: Request):
-    if "user_id" not in request.session:
-        return JSONResponse({"error": "login required"}, status_code=401)
+def admin_users(user: dict = Depends(require("user:read"))):
     rows = db().execute("SELECT id, username, is_admin FROM users").fetchall()
     return [dict(r) for r in rows]
 
 
 @app.delete("/users/{user_id}")
-def delete_user(user_id: int, request: Request):
-    if "user_id" not in request.session:
-        return JSONResponse({"error": "login required"}, status_code=401)
+def delete_user(user_id: int, user: dict = Depends(require("user:delete"))):
     conn = db()
     conn.execute("DELETE FROM users WHERE id = ?", (user_id,))
     conn.commit()
