@@ -159,7 +159,10 @@ def calc(data: dict = Body(...)):
 
 @app.post("/import-yaml")
 async def import_yaml(request: Request):
-    cfg = yaml.load(await request.body(), Loader=yaml.Loader)
+    try:
+        cfg = yaml.safe_load(await request.body())
+    except yaml.YAMLError:
+        raise HTTPException(status_code=400, detail="invalid YAML")
     return {"keys": list(cfg.keys()) if isinstance(cfg, dict) else str(type(cfg))}
 
 
