@@ -12,7 +12,6 @@ import os
 import secrets
 import sqlite3
 import subprocess
-import traceback
 from ipaddress import ip_address
 from pathlib import Path
 from urllib.parse import urlparse
@@ -90,7 +89,8 @@ async def security_headers(request: Request, call_next):
 
 @app.exception_handler(Exception)
 async def handle_error(request: Request, exc: Exception):
-    return HTMLResponse("<pre>" + traceback.format_exc() + "</pre>", status_code=500)
+    log.exception("unhandled error on %s %s", request.method, request.url.path)  # détail côté serveur
+    return JSONResponse({"error": "internal error"}, status_code=500)
 
 def current_user(request: Request):
     """Utilisateur connecté (lu en base d'après la session signée), sinon 401."""
