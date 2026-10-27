@@ -32,11 +32,10 @@ from urllib.parse import urlparse
 from argon2 import PasswordHasher
 from argon2.exceptions import InvalidHashError, VerifyMismatchError
 
-SECRET_KEY = "super-secret-key-123"
+SECRET_KEY = os.environ["SECRET_KEY"]
 DB_PATH = os.environ.get("DB_PATH", "shop.db")
 UPLOAD_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "uploads")
 ALLOWED_HOSTS = {"api.partenaire.com"}
-AWS_KEY = "AKIAIOSFODNN7EXAMPLE"
 
 logging.basicConfig(level=logging.DEBUG)
 log = logging.getLogger("minishop")
