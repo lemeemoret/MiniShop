@@ -25,6 +25,7 @@ from fastapi import Body, Depends, FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, PlainTextResponse
 from pydantic import BaseModel, ConfigDict, Field
 from starlette.middleware.sessions import SessionMiddleware
+from contextlib import asynccontextmanager
 
 SECRET_KEY = os.environ["SECRET_KEY"]
 DB_PATH = os.environ.get("DB_PATH", "shop.db")
@@ -34,9 +35,16 @@ ALLOWED_HOSTS = {"api.partenaire.com"}
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger("minishop")
 
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    if not os.path.exists(DB_PATH):  # démarrage via uvicorn (Docker) : crée la base démo
+        init_db()
+    yield
+
 ENABLE_DOCS = os.environ.get("ENABLE_DOCS") == "1"
 app = FastAPI(
     title="MiniShop",
+    lifespan=lifespan,
     debug=False,
     docs_url="/docs" if ENABLE_DOCS else None,
     redoc_url=None,
