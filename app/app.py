@@ -131,10 +131,14 @@ def require(perm: str):
 def health():
     return {"status": "ok"}
 
+class LoginIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    username: str = Field(min_length=1, max_length=64)
+    password: str = Field(min_length=1, max_length=128)
 
 @app.post("/login")
-def login(request: Request, data: dict = Body(...)):
-    username, password = data["username"], data["password"]
+def login(request: Request, data: LoginIn):
+    username, password = data.username, data.password
     row = db().execute("SELECT * FROM users WHERE username = ?", (username,)).fetchone()
     try:
         ph.verify(row["password"] if row else DUMMY_HASH, password)
@@ -146,7 +150,6 @@ def login(request: Request, data: dict = Body(...)):
     request.session["user_id"] = row["id"]
     request.session["token"] = secrets.token_urlsafe(32)
     return {"status": "logged in", "user": row["username"]}
-
 
 @app.get("/search")
 def search(q: str = ""):
